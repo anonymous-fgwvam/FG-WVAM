@@ -1,0 +1,194 @@
+# Stage 2b: value expert pretraining (value_only).
+# Set diffusion_model.model_path to the stage-2 checkpoint; the value expert
+# is the only trainable module in this stage.
+model_name: 'ltx_train'
+is_i2v: True
+report_to: None
+tracker_name: fgwvam_stage2b_value_pretrain
+
+logging_dir: logs
+output_dir: runs/stage2b_value_pretrain
+pretrained_model_name_or_path: /path/to/LTX-Video
+
+train_data_class_path: data/drone_lerobot_dataset.py
+train_data_class: DroneLeRobotDataset
+val_data_class_path: data/drone_lerobot_dataset.py
+val_data_class: DroneLeRobotDataset
+
+tokenizer_class_path: transformers
+tokenizer_class: T5Tokenizer
+textenc_class_path: transformers
+textenc_class: T5EncoderModel
+vae_class_path: models/ltx_models/autoencoder_kl_ltx.py
+vae_class: AutoencoderKLLTXVideo
+diffusion_model_class_path: models/ltx_models/transformer_ltx_multiview.py
+diffusion_model_class: LTXVideoTransformer3DModel
+diffusion_scheduler_class_path: diffusers
+diffusion_scheduler_class: FlowMatchEulerDiscreteScheduler
+
+pipeline_class_path: models/pipeline/custom_pipeline.py
+pipeline_class: CustomPipeline
+
+return_action: False
+return_video: False
+return_value: True
+train_mode: 'value_only'
+action_loss_scale: 1.0
+value_loss_scale: 1.0
+action_discrete: true
+
+use_value_pose_condition: True
+use_video_frame_ids_rope: True
+use_start_video: True
+
+train_steps: 30000
+train_epochs: 10000
+steps_to_save: 10000
+steps_to_log: 20
+steps_to_val: 5000
+
+mixed_precision: bf16
+allow_tf32: False
+
+nccl_timeout: 600
+seed: 42
+
+enable_slicing: True
+enable_tiling: True
+
+add_state: False
+caption_dropout_p: 0.0
+
+batch_size: 8
+dataloader_num_workers: 8
+pin_memory: True
+
+gradient_checkpointing: True
+noise_to_first_frame: 0.1
+
+optimizer: adamw
+lr: 5.0e-5
+beta1: 0.9
+beta2: 0.95
+beta3: 0.999
+epsilon: 1e-8
+weight_decay: 1e-5
+optimizer_8bit: False
+optimizer_torchao: False
+scale_lr: False
+
+max_grad_norm: 1.0
+gradient_accumulation_steps: 1
+
+lr_scheduler: constant_with_warmup
+lr_warmup_steps: 2000
+lr_num_cycles: 1
+lr_power: 1.0
+
+flow_weighting_scheme: none
+flow_logit_mean: 0.0
+flow_logit_std: 1.0
+flow_mode_scale: 1.29
+
+pixel_wise_timestep: True
+
+diffusion_model:
+  # Start value learning from the 60k discrete action_full checkpoint, not from
+  # the older video-only checkpoint. Missing value_* tensors are loaded
+  # non-strictly and initialized randomly.
+  model_path: /path/to/checkpoints/stage2_video/diffusion_pytorch_model.safetensors
+  config:
+    activation_fn: gelu-approximate
+    attention_bias: true
+    attention_head_dim: 64
+    attention_out_bias: true
+    caption_channels: 4096
+    cross_attention_dim: 2048
+    in_channels: 128
+    norm_elementwise_affine: false
+    norm_eps: 1.0e-6
+    num_attention_heads: 32
+    num_layers: 28
+    out_channels: 128
+    patch_size: 1
+    patch_size_t: 1
+    qk_norm: rms_norm_across_heads
+    max_view: 4
+    action_expert: true
+    value_expert: true
+    action_value_cross_attention: false
+    action_in_channels: 14
+    action_num_attention_heads: 16
+    action_attention_head_dim: 32
+    learnable_action_state: true
+    value_in_channels: 1
+    value_num_attention_heads: 16
+    value_attention_head_dim: 32
+    action_discrete: true
+    action_discrete_mode: categorical
+    action_num_active_dims: 1
+    action_num_classes_per_dim: 6
+    action_discrete_mean: [0.0, 0.21654837016469752, 0.0007343418542033915, 0.002631639963829442, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    action_discrete_std: [0.0, 0.13442959871205523, 0.09737561566608494, 0.19551144476624932, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+data:
+  train:
+    data_roots: [
+      "/path/to/data/drone_lerobot_dataset_fantasy_v1_value_train",
+      "/path/to/data/drone_lerobot_dataset_failure_v1_train",
+    ]
+    domains: ["drone", "drone"]
+    sample_size: [256, 256]
+    sample_n_frames: 8
+    preprocess: 'resize'
+    valid_cam: ["observation.images.cam_front", "observation.images.cam_left", "observation.images.cam_right", "observation.images.cam_down"]
+    chunk: 2
+    action_chunk: 2
+    n_previous: 2
+    previous_pick_mode: 'uniform'
+    random_crop: False
+    dataset_info_cache_path: "data/cache/drone_lerobot_fantasy_mixed_train"
+    action_type: "absolute"
+    action_space: "joint"
+    action_discrete_mode: categorical
+    stat_file: "configs/drone_stats_fantasy.json"
+    state_key: "observation.pose"
+    action_key: action
+    value_key: "state_value"
+    value_dense: True
+    min_length: 4
+    add_start_video: True
+  val:
+    data_roots: [
+      "/path/to/data/drone_lerobot_dataset_fantasy_v1_value_test",
+      "/path/to/data/drone_lerobot_dataset_failure_v1_test",
+    ]
+    domains: ["drone", "drone"]
+    sample_size: [256, 256]
+    sample_n_frames: 8
+    preprocess: 'resize'
+    valid_cam: ["observation.images.cam_front", "observation.images.cam_left", "observation.images.cam_right", "observation.images.cam_down"]
+    chunk: 2
+    action_chunk: 2
+    n_previous: 2
+    previous_pick_mode: 'uniform'
+    random_crop: False
+    dataset_info_cache_path: "data/cache/drone_lerobot_fantasy_mixed_val"
+    action_type: "absolute"
+    action_space: "joint"
+    action_discrete_mode: categorical
+    stat_file: "configs/drone_stats_fantasy.json"
+    state_key: "observation.pose"
+    action_key: action
+    value_key: "state_value"
+    value_dense: True
+    min_length: 4
+    add_start_video: True
+
+use_color_jitter: true
+num_inference_step: 10
+noisy_video: false
+
+load_weights: true
+disable_value_symlog: true
+use_deepspeed: false

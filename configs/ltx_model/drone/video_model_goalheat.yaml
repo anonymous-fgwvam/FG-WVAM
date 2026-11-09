@@ -1,0 +1,181 @@
+model_name: ltx_train
+is_i2v: true
+report_to: None
+tracker_name: fgwvam_video_goalheat_top3
+
+logging_dir: logs
+output_dir: /path/to/data/drone_video_goalheat_top3
+pretrained_model_name_or_path: /path/to/LTX-Video
+resume_from: ""
+
+train_data_class_path: data/drone_lerobot_dataset.py
+train_data_class: DroneLeRobotDataset
+val_data_class_path: data/drone_lerobot_dataset.py
+val_data_class: DroneLeRobotDataset
+
+tokenizer_class_path: transformers
+tokenizer_class: T5Tokenizer
+textenc_class_path: transformers
+textenc_class: T5EncoderModel
+vae_class_path: models/ltx_models/autoencoder_kl_ltx.py
+vae_class: AutoencoderKLLTXVideo
+diffusion_model_class_path: models/ltx_models/transformer_ltx_multiview.py
+diffusion_model_class: LTXVideoTransformer3DModel
+diffusion_scheduler_class_path: diffusers
+diffusion_scheduler_class: FlowMatchEulerDiscreteScheduler
+pipeline_class_path: models/pipeline/custom_pipeline.py
+pipeline_class: CustomPipeline
+
+return_action: false
+return_video: true
+return_value: false
+train_mode: video_only
+action_injection: none
+action_loss_scale: 1.0
+value_loss_scale: 1.0
+
+train_steps: 1000000
+train_epochs: 10000
+steps_to_save: 10000
+steps_to_log: 20
+steps_to_val: 5000
+
+mixed_precision: bf16
+allow_tf32: false
+nccl_timeout: 600
+seed: 42
+enable_slicing: true
+enable_tiling: true
+add_state: false
+caption_dropout_p: 0.0
+
+batch_size: 8
+dataloader_num_workers: 8
+pin_memory: true
+gradient_checkpointing: true
+noise_to_first_frame: 0.1
+
+optimizer: adamw
+lr: 1.0e-5
+beta1: 0.9
+beta2: 0.95
+beta3: 0.999
+epsilon: 1.0e-8
+weight_decay: 1.0e-5
+optimizer_8bit: false
+optimizer_torchao: false
+scale_lr: false
+max_grad_norm: 1.0
+gradient_accumulation_steps: 1
+
+lr_scheduler: cosine
+lr_warmup_steps: 5000
+lr_num_cycles: 1
+lr_power: 1.0
+
+flow_weighting_scheme: none
+flow_logit_mean: 0.0
+flow_logit_std: 1.5
+flow_mode_scale: 1.29
+pixel_wise_timestep: true
+
+diffusion_model:
+  model_path: /path/to/checkpoints/drone_video_fantasy/2026_08_16_15_54_43/step_220000/diffusion_pytorch_model.safetensors
+  config:
+    activation_fn: gelu-approximate
+    attention_bias: true
+    attention_head_dim: 64
+    attention_out_bias: true
+    caption_channels: 4096
+    cross_attention_dim: 2048
+    in_channels: 128
+    norm_elementwise_affine: false
+    norm_eps: 1.0e-6
+    num_attention_heads: 32
+    num_layers: 28
+    out_channels: 128
+    patch_size: 1
+    patch_size_t: 1
+    qk_norm: rms_norm_across_heads
+    max_view: 4
+    action_expert: false
+    pose_channels: 14
+    action_in_channels: 14
+    action_num_attention_heads: 16
+    action_attention_head_dim: 32
+    action_projection_channels: 128
+    use_goal_heatmap_head: true
+    goal_heatmap_out_hw: 32
+    goal_heatmap_num_frames: 2
+
+data:
+  train:
+    data_roots: [/path/to/data/drone_lerobot_dataset_fantasy_v1]
+    domains: [drone]
+    split: train
+    sample_size: [256, 256]
+    sample_n_frames: 4
+    preprocess: resize
+    valid_cam: [observation.images.cam_front, observation.images.cam_left, observation.images.cam_right, observation.images.cam_down]
+    chunk: 2
+    action_chunk: 2
+    n_previous: 2
+    previous_pick_mode: uniform
+    random_crop: false
+    dataset_info_cache_path: data/cache/drone_lerobot_fantasy_v1_train
+    min_length: 4
+    action_type: absolute
+    action_space: joint
+    action_discrete_mode: categorical
+    stat_file: configs/drone_stats_fantasy.json
+    state_key: observation.pose
+    action_key: action
+    value_key: state_value
+    value_dense: true
+    goal_label_dir: /path/to/data/labels_object_name_soft_top3_full
+    goal_label_cache_size: 32
+  val:
+    data_roots: [/path/to/data/drone_lerobot_dataset_fantasy_v1]
+    domains: [drone]
+    split: test
+    sample_size: [256, 256]
+    sample_n_frames: 4
+    preprocess: resize
+    valid_cam: [observation.images.cam_front, observation.images.cam_left, observation.images.cam_right, observation.images.cam_down]
+    chunk: 2
+    action_chunk: 2
+    n_previous: 2
+    previous_pick_mode: uniform
+    random_crop: false
+    dataset_info_cache_path: data/cache/drone_lerobot_fantasy_v1_val
+    min_length: 4
+    action_type: absolute
+    action_space: joint
+    action_discrete_mode: categorical
+    stat_file: configs/drone_stats_fantasy.json
+    state_key: observation.pose
+    action_key: action
+    value_key: state_value
+    value_dense: true
+    goal_label_dir: /path/to/data/labels_object_name_soft_top3_full
+    goal_label_cache_size: 32
+
+use_color_jitter: true
+num_inference_step: 10
+decode_timestep: 0.03
+decode_noise_scale: 0.025
+noisy_video: true
+load_weights: true
+
+use_goal_heatmap: true
+goal_heatmap_loss_scale: 0.1
+
+use_deepspeed: true
+deepspeed:
+  zero_optimization:
+    stage: 2
+  bf16:
+    enabled: true
+  gradient_clipping: true
+  gradient_threshold: 0.5
+  train_batch_size: 8

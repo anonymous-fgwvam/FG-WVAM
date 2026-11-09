@@ -1,0 +1,201 @@
+model_name: 'ltx_train'
+is_i2v: true
+report_to: none
+tracker_name: fgwvam_action_value_v3_frozen_video_aligned
+
+logging_dir: logs
+output_dir: /path/to/data/drone_action_value_v3_frozen_video_aligned
+pretrained_model_name_or_path: /path/to/LTX-Video
+
+train_data_class_path: data/drone_lerobot_dataset.py
+train_data_class: DroneLeRobotDataset
+val_data_class_path: data/drone_lerobot_dataset.py
+val_data_class: DroneLeRobotDataset
+
+tokenizer_class_path: transformers
+tokenizer_class: T5Tokenizer
+textenc_class_path: transformers
+textenc_class: T5EncoderModel
+vae_class_path: models/ltx_models/autoencoder_kl_ltx.py
+vae_class: AutoencoderKLLTXVideo
+diffusion_model_class_path: models/ltx_models/transformer_ltx_multiview.py
+diffusion_model_class: LTXVideoTransformer3DModel
+diffusion_scheduler_class_path: diffusers
+diffusion_scheduler_class: FlowMatchEulerDiscreteScheduler
+pipeline_class_path: models/pipeline/custom_pipeline.py
+pipeline_class: CustomPipeline
+
+# Video and goal modules still produce conditioning features, but only
+# action_* and value_* parameters are optimized in value_action mode.
+return_action: true
+return_video: true
+return_value: true
+train_mode: value_action
+action_loss_scale: 1.0
+value_loss_scale: 1.0
+# Train value flow matching with x_sigma=(1-sigma)*target+sigma*noise and
+# the matching sampled timestep. The old joint path forced x_sigma=noise
+# while still passing a random timestep whenever the action head was enabled.
+value_force_full_noise_with_action: false
+action_discrete: true
+action_class_weight: [1.10, 0.60, 1.10, 1.10, 1.30, 1.30]
+
+use_value_pose_condition: true
+# Keep spatial pose history, but replace absolute episode progress with fixed
+# relative token order [-2, -1, 0] in both training and serving.
+value_pose_time_mode: relative_order
+# Preserve the exact conditioning protocol used by the frozen video model.
+# The episode-start pose remains in pose_history for the value branch, but the
+# start RGB frame and absolute frame IDs must not enter the video token stream.
+use_video_frame_ids_rope: false
+use_start_video: false
+
+train_steps: 60000
+train_epochs: 10000
+steps_to_save: 10000
+steps_to_log: 20
+steps_to_val: 5000
+
+mixed_precision: bf16
+trainable_params_fp32: true
+allow_tf32: false
+nccl_timeout: 600
+seed: 42
+
+enable_slicing: true
+enable_tiling: true
+add_state: false
+caption_dropout_p: 0.0
+batch_size: 8
+dataloader_num_workers: 8
+pin_memory: true
+gradient_checkpointing: true
+noise_to_first_frame: 0.1
+
+optimizer: adamw
+lr: 1.0e-5
+beta1: 0.9
+beta2: 0.95
+beta3: 0.999
+epsilon: 1.0e-8
+weight_decay: 1.0e-5
+optimizer_8bit: false
+optimizer_torchao: false
+scale_lr: false
+max_grad_norm: 1.0
+gradient_accumulation_steps: 1
+
+lr_scheduler: cosine
+lr_warmup_steps: 500
+lr_num_cycles: 1
+lr_power: 1.0
+
+flow_weighting_scheme: none
+flow_logit_mean: 0.0
+flow_logit_std: 1.0
+flow_mode_scale: 1.29
+pixel_wise_timestep: true
+
+diffusion_model:
+  model_path: /path/to/checkpoints/action_value_v3_video_goalheat80k_aligned/diffusion_pytorch_model.safetensors
+  config:
+    activation_fn: gelu-approximate
+    attention_bias: true
+    attention_head_dim: 64
+    attention_out_bias: true
+    caption_channels: 4096
+    cross_attention_dim: 2048
+    in_channels: 128
+    norm_elementwise_affine: false
+    norm_eps: 1.0e-6
+    num_attention_heads: 32
+    num_layers: 28
+    out_channels: 128
+    patch_size: 1
+    patch_size_t: 1
+    qk_norm: rms_norm_across_heads
+    max_view: 4
+    action_expert: true
+    value_expert: true
+    goal_heatmap_out_hw: 32
+    goal_heatmap_num_frames: 2
+    use_goal_heatmap_head: true
+    use_goal_latent_heatmap_head: true
+    action_in_channels: 14
+    action_num_attention_heads: 16
+    action_attention_head_dim: 32
+    learnable_action_state: true
+    value_in_channels: 1
+    value_num_attention_heads: 16
+    value_attention_head_dim: 32
+    value_goal_latent_cross_attention: true
+    value_goal_latent_attention_dim: 128
+    action_discrete: true
+    action_discrete_mode: categorical
+    action_num_active_dims: 1
+    action_num_classes_per_dim: 6
+    action_discrete_mean: [0.0, 0.21654837016469752, 0.0007343418542033915, 0.002631639963829442, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    action_discrete_std: [0.0, 0.13442959871205523, 0.09737561566608494, 0.19551144476624932, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+data:
+  train:
+    data_roots: [/path/to/data/drone_lerobot_dataset_fantasy_v1_value_v2_full]
+    domains: [drone]
+    split: train
+    sample_size: [256, 256]
+    sample_n_frames: 4
+    preprocess: resize
+    valid_cam: [observation.images.cam_front, observation.images.cam_left, observation.images.cam_right, observation.images.cam_down]
+    chunk: 2
+    action_chunk: 2
+    n_previous: 2
+    previous_pick_mode: uniform
+    random_crop: false
+    dataset_info_cache_path: data/cache/drone_fantasy_v2_av_frozen_relative_train
+    action_type: absolute
+    action_space: joint
+    action_discrete_mode: categorical
+    stat_file: configs/drone_stats_fantasy.json
+    state_key: observation.pose
+    action_key: action
+    value_key: state_value
+    value_dense: true
+    min_length: 4
+    add_start_video: false
+  val:
+    data_roots: [/path/to/data/drone_lerobot_dataset_fantasy_v1_value_v2_full]
+    domains: [drone]
+    split: test
+    sample_size: [256, 256]
+    sample_n_frames: 4
+    preprocess: resize
+    valid_cam: [observation.images.cam_front, observation.images.cam_left, observation.images.cam_right, observation.images.cam_down]
+    chunk: 2
+    action_chunk: 2
+    n_previous: 2
+    previous_pick_mode: uniform
+    random_crop: false
+    dataset_info_cache_path: data/cache/drone_fantasy_v2_av_frozen_relative_val
+    action_type: absolute
+    action_space: joint
+    action_discrete_mode: categorical
+    stat_file: configs/drone_stats_fantasy.json
+    state_key: observation.pose
+    action_key: action
+    value_key: state_value
+    value_dense: true
+    min_length: 4
+    add_start_video: false
+
+use_color_jitter: false
+basic_fps: 10
+num_inference_step: 10
+decode_timestep: 0.03
+decode_noise_scale: 0.025
+# Sample the same video-noise range used by full video denoising instead of
+# forcing the value/action heads to see only sigma=1 video features.
+noisy_video: false
+
+load_weights: true
+disable_value_symlog: true
+use_deepspeed: false
